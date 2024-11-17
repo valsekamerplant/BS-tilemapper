@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tileset Generator with Overlay</title>
+</head>
+<body>
+  <h1>Tileset Generator with Overlay</h1>
+
+  <label for="tileColorPicker">Tile Color:</label>
+  <input type="color" id="tileColorPicker" value="#2E4F2E"><br>
+
+  <label for="edgeColorPicker">Edge Base Color:</label>
+  <input type="color" id="edgeColorPicker" value="#7B2F5D"><br>
+
+  <button id="generate">Generate Tileset</button>
+  <br>
+  <canvas id="mainCanvas" width="512" height="512" style="border: 1px solid black;"></canvas>
+
+  <script>
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const redImage = new Image();
+    const greenImage = new Image();
+    const blueImage = new Image();
+    const alphaImage = new Image();
+
+    redImage.src = 'red_channel.png';
+    greenImage.src = 'green_channel.png';
+    blueImage.src = 'blue_channel.png';
+    alphaImage.src = 'alpha_channel.png';
+
+    const imagesLoaded = [redImage, greenImage, blueImage, alphaImage].map(
+      (img) => new Promise((resolve) => img.onload = resolve)
+    );
+
+    Promise.all(imagesLoaded).then(() => {
+      document.getElementById('generate').addEventListener('click', generateTileset);
+    });
+
+    function generateTileset() {
+      const tileColor = document.getElementById('tileColorPicker').value;
+      const edgeColor = document.getElementById('edgeColorPicker').value;
+
+      const tileRgb = hexToRgb(tileColor);
+      const edgeRgb = hexToRgb(edgeColor);
+
+      const redData = getImageData(redImage);
+      const greenData = getImageData(greenImage);
+      const blueData = getImageData(blueImage);
+      const alphaData = getImageData(alphaImage);
+
+      const tileOutput = ctx.createImageData(canvas.width, canvas.height);
+      const edgeOutput = ctx.createImageData(canvas.width, canvas.height);
+
+      for (let i = 0; i < tileOutput.data.length; i += 4) {
+        const r = redData.data[i] / 255; // Red channel (tile transparency)
+        const g = greenData.data[i] / 255; // Green channel (tile color intensity)
+        const b = blueData.data[i] / 255; // Blue channel (edge color intensity)
+        const a = alphaData.data[i] / 255; // Alpha channel (edge transparency)
+
+        // Tile layer (controlled by red and green channels)
+        tileOutput.data[i] = g * tileRgb.r; // Tile red
+        tileOutput.data[i + 1] = g * tileRgb.g; // Tile green
+        tileOutput.data[i + 2] = g * tileRgb.b; // Tile blue
+        tileOutput.data[i + 3] = r * 255; // Tile transparency (red channel intensity)
+
+        // Edge layer (controlled by blue and alpha channels)
+        edgeOutput.data[i] = b * edgeRgb.r; // Edge red
+        edgeOutput.data[i + 1] = b * edgeRgb.g; // Edge green
+        edgeOutput.data[i + 2] = b * edgeRgb.b; // Edge blue
+        edgeOutput.data[i + 3] = a * 255; // Edge transparency
+      }
+
+      // Render the tile layer
+      ctx.putImageData(tileOutput, 0, 0);
+
+      // Overlay the edge layer
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.putImageData(edgeOutput, 0, 0);
+
+      // Use global alpha to correctly overlay the edge layer
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(tempCanvas, 0, 0);
+    }
+
+    function getImageData(image) {
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      tempCtx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    function hexToRgb(hex) {
+      const bigint = parseInt(hex.slice(1), 16);
+      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    }
+  </script>
+</body>
+</html>
